@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -109,7 +111,7 @@ public class CommandHandlerApplication {
 //                        e -> logger.debug(e.getLocalizedMessage())
 //                );
 
-        return var;
+        return var.subscribeOn(Schedulers.elastic());  // retrieve each balance on a different thread.
     }
 
     /*
