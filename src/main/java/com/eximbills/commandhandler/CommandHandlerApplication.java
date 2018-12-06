@@ -1,6 +1,7 @@
 package com.eximbills.commandhandler;
 
 import com.eximbills.commandhandler.domain.Balance;
+import com.eximbills.commandhandler.domain.Entry;
 import com.eximbills.commandhandler.domain.Event;
 import com.eximbills.commandhandler.domain.Step;
 import com.eximbills.commandhandler.repository.EventRepository;
@@ -14,9 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -65,7 +66,6 @@ public class CommandHandlerApplication {
 
     @GetMapping("/balance/{id}")
     @ResponseBody
-    @Transactional(readOnly = true)
     Mono<List> getBalanceInfo(@PathVariable("id") Long id) {
         List<Balance> balances = new ArrayList<>();
 
@@ -114,45 +114,63 @@ public class CommandHandlerApplication {
         return var.subscribeOn(Schedulers.elastic());  // retrieve each balance on a different thread.
     }
 
-    /*
-    @PutMapping("/balance/{id}/{amount}/{transactionId}")
-    @ResponseBody
-    @Transactional
-    public Step postEntry(@PathVariable("id") Long id, @PathVariable("amount") String amount,
-                          @PathVariable("transactionId") String transactionId) {
-        Event event = eventRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("No event found with id=" + id));
-        if (event.getStatus().equals("Y")) throw new ResourceLockedException();
-        event.setDescription(event.getDescription() + amount);
-        event.setStatus("Y");
-        Step step = new Step(transactionId, amount, event);
-        eventRepository.save(event);
-        return stepRepository.save(step);
-    }
 
-    @PutMapping("/balance/{id}")
+    @PutMapping("/balance/{id}/{amount}")
     @ResponseBody
-    @Transactional
-    public Event unHold(@PathVariable("id") Long id) {
-        Event event = eventRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("No event found with id=" + id));
-        event.setStatus("N");
-        return eventRepository.save(event);
-    }
+    public String postTransaction(@PathVariable("id") Long id, @PathVariable("amount") float amount) {
+        logger.debug("Request for post transaction: id " + id + ", amount " + amount);
 
-    @PutMapping("/balance/{id}/{transactionId}")
-    @ResponseBody
-    @Transactional
-    public Step reverseEntry(@PathVariable("id") Long id,
-                             @PathVariable("transactionId") String transactionId) {
-        Step step = stepRepository.findById(transactionId)
-                .orElseThrow(() -> new ResourceNotFoundException("No step found with id=" + id));
-        Event event = step.getEvent();
-        event.setDescription(event.getDescription() - step.getEntryDescription());
-        event.setStatus("N");
-        step.setEntryDescription(0);
+        // Before post, write transaction info into event store
+        String eventId = UUID.randomUUID().toString();
+        Event event = new Event(eventId, "Post transaction with id " + id + ", amount " + amount,
+                "start");
+
+        String stepId = UUID.randomUUID().toString();
+        Step step = new Step(stepId, "Post transaction with id " + id + ", amount " + amount,
+                "start", event);
+
         eventRepository.save(event);
-        return stepRepository.save(step);
-    }*/
+        stepRepository.save(step);
+
+        // Post transaction
+        List<Entry> entries = new ArrayList<>();
+
+        Mono<Entry> entry1 = WebClient.create()
+                .put()
+                .uri("http://localhost:8081/balance/{id}/{amount}/{transactionId}", id, amount, eventId)
+                .retrieve()
+                .bodyToMono(Entry.class);
+
+        Mono<Entry> entry2 = WebClient.create()
+                .put()
+                .uri("http://localhost:8082/balance/{id}/{amount}/{transactionId}", id, amount, eventId)
+                .retrieve()
+                .bodyToMono(Entry.class);
+
+        Mono.zip(entry1, entry2)
+                .map(tuple -> {
+                    Entry ent1 = tuple.getT1();
+                    Entry ent2 = tuple.getT2();
+                    entries.add(ent1);
+                    entries.add(ent2);
+                    return entries;
+                })
+                .timeout(Duration.ofSeconds(30))
+                .subscribeOn(Schedulers.elastic())
+                .subscribe(
+                        ents -> {
+                            // success
+                            logger.debug("There are " + ents.size() + " trx submitted successfully.");
+                            logger.debug("Trx 1: " + ents.get(0).toString());
+                            logger.debug("Trx 2: " + ents.get(1).toString());
+                        },
+                        e -> {
+                            // failure
+                            logger.debug(e.getMessage());
+                        }
+                );
+
+        return " ";
+    }
 
 }
