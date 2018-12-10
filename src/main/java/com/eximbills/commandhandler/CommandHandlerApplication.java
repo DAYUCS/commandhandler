@@ -190,8 +190,9 @@ public class CommandHandlerApplication {
                 .subscribe(
                         val -> {
                             logger.debug("Zip value: " + val);
-                            // TODO Commitment here
-                            Flux<Service> commitSteps = Flux.fromArray(services);
+                            // Commitment here
+                            Flux<Service> commitSteps = Flux.fromArray(services)
+                                    .filter(service -> service.getHoldFlag());
                             List<Mono<Balance>> balances = new ArrayList();
                             commitSteps.subscribe(commitStep -> {
                                 Mono<Balance> balance = WebClient.create()
