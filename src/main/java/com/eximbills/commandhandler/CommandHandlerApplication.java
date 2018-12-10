@@ -160,12 +160,14 @@ public class CommandHandlerApplication {
                     .bodyToMono(Entry.class)
                     .log()
                     .doOnSuccess(p -> {
-                        logger.debug("API call completed." + p.toString());
+                        logger.debug("Call " + stp.getTrxUrl() + " completed with response " + p.toString());
                         stp.setSubmitStatus("success");
+                        // TODO save step status into event store
                     })
                     .doOnError(ex -> {
-                        logger.debug("API call completed with error: " + ex.getMessage());
+                        logger.debug("Call " + stp.getTrxUrl() + " completed with error " + ex.getMessage());
                         stp.setSubmitStatus("error");
+                        // TODO save step status into event store
                     });
             entries.add(entry);
         });
@@ -188,11 +190,49 @@ public class CommandHandlerApplication {
                 .subscribe(
                         val -> {
                             logger.debug("Zip value: " + val);
-                            // Commitment here
+                            // TODO Commitment here
+                            Flux<Service> commitSteps = Flux.fromArray(services);
+                            List<Mono<Balance>> balances = new ArrayList();
+                            commitSteps.subscribe(commitStep -> {
+                                Mono<Balance> balance = WebClient.create()
+                                        .put()
+                                        .uri(commitStep.getBaseUrl() + commitStep.getCommitUrl(), id)
+                                        .accept(MediaType.APPLICATION_JSON)
+                                        .retrieve()
+                                        .onStatus(HttpStatus::is4xxClientError, clientResponse ->
+                                                Mono.error(new ResourceLockedException()))
+                                        .bodyToMono(Balance.class)
+                                        .log()
+                                        .doOnSuccess(p -> {
+                                            logger.debug("Call " + commitStep.getCommitUrl() + " completed with response " + p.toString());
+                                            commitStep.setCommitStatus("success");
+                                            // TODO save submit step status into event store
+                                        })
+                                        .doOnError(ex -> {
+                                            logger.debug("Call " + commitStep.getCommitUrl() + " completed with error " + ex.getMessage());
+                                            commitStep.setCommitStatus("error");
+                                            // TODO save submit step status into event store
+                                        });
+                                balances.add(balance);
+                            });
+                            Mono.zipDelayError(balances, values -> {
+                                StringBuffer sb = new StringBuffer();
+                                for (int i = 0; i < values.length; i++) {
+                                    logger.debug("Trx " + i + ": " + values[i].toString());
+                                    sb.append(values[i]);
+                                }
+                                return sb.toString();
+                            }).timeout(Duration.ofSeconds(30))
+                                    .subscribeOn(Schedulers.elastic()).subscribe(v -> {
+                                        //TODO save commit step status into event store
+                                    },
+                                    e -> {
+                                        //TODO save commit step status into event store
+                                    });
                         },
                         err -> {
                             logger.debug("Zip error: " + err.getMessage());
-                            // Compensating here
+                            // TODO Compensating here
                         }
                 );
 
