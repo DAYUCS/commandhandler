@@ -1,19 +1,20 @@
 package com.eximbills.commandhandler;
 
-import com.eximbills.commandhandler.domain.Balance;
-import com.eximbills.commandhandler.domain.Entry;
-import com.eximbills.commandhandler.domain.Event;
-import com.eximbills.commandhandler.domain.Step;
+import com.eximbills.commandhandler.domain.*;
 import com.eximbills.commandhandler.repository.EventRepository;
 import com.eximbills.commandhandler.repository.StepRepository;
+import com.fasterxml.uuid.Generators;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -120,57 +121,82 @@ public class CommandHandlerApplication {
     public String postTransaction(@PathVariable("id") Long id, @PathVariable("amount") float amount) {
         logger.debug("Request for post transaction: id " + id + ", amount " + amount);
 
+        // Services definition
+        Service[] services =
+                new Service[]{
+                        new Service("http://localhost:8081/balance",
+                                "/{id}/{amount}/{transactionId}",
+                                "/{id}/{transactionId",
+                                true, "/{id}"),
+                        new Service("http://localhost:8082/balance",
+                                "/{id}/{amount}/{transactionId}",
+                                "/{id}/{transactionId",
+                                true, "/{id}")};
+
+        Flux<Service> steps = Flux.fromArray(services);
+
         // Before post, write transaction info into event store
-        String eventId = UUID.randomUUID().toString();
+        String eventId = Generators.timeBasedGenerator().generate().toString();
         Event event = new Event(eventId, "Post transaction with id " + id + ", amount " + amount,
                 "start");
 
-        String stepId = UUID.randomUUID().toString();
+        String stepId = Generators.timeBasedGenerator().generate().toString();
         Step step = new Step(stepId, "Post transaction with id " + id + ", amount " + amount,
                 "start", event);
 
         eventRepository.save(event);
         stepRepository.save(step);
 
-        // Post transaction
-        List<Entry> entries = new ArrayList<>();
+        // Build Web API call of submits
+        List<Mono<Entry>> entries = new ArrayList();
+        steps.subscribe(stp -> {
+            Mono<Entry> entry = WebClient.create()
+                    .put()
+                    .uri(stp.getBaseUrl() + stp.getTrxUrl(), id, amount, eventId)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .onStatus(HttpStatus::is4xxClientError, clientResponse ->
+                            Mono.error(new ResourceLockedException()))
+                    .bodyToMono(Entry.class)
+                    .log()
+                    .doOnSuccess(p -> {
+                        logger.debug("API call completed." + p.toString());
+                        stp.setSubmitStatus("success");
+                    })
+                    .doOnError(ex -> {
+                        logger.debug("API call completed with error: " + ex.getMessage());
+                        stp.setSubmitStatus("error");
+                    });
+            entries.add(entry);
+        });
 
-        Mono<Entry> entry1 = WebClient.create()
-                .put()
-                .uri("http://localhost:8081/balance/{id}/{amount}/{transactionId}", id, amount, eventId)
-                .retrieve()
-                .bodyToMono(Entry.class);
+        logger.debug("Step number is " + entries.size());
 
-        Mono<Entry> entry2 = WebClient.create()
-                .put()
-                .uri("http://localhost:8082/balance/{id}/{amount}/{transactionId}", id, amount, eventId)
-                .retrieve()
-                .bodyToMono(Entry.class);
+        // Zip all API call
+        Mono<String> all = Mono.zipDelayError(entries, values -> {
+            StringBuffer sb = new StringBuffer();
+            for (int i = 0; i < values.length; i++) {
+                logger.debug("Trx " + i + ": " + values[i].toString());
+                sb.append(values[i]);
+            }
+            return sb.toString();
+        });
 
-        Mono.zip(entry1, entry2)
-                .map(tuple -> {
-                    Entry ent1 = tuple.getT1();
-                    Entry ent2 = tuple.getT2();
-                    entries.add(ent1);
-                    entries.add(ent2);
-                    return entries;
-                })
-                .timeout(Duration.ofSeconds(30))
+        // submit transactions
+        all.timeout(Duration.ofSeconds(30))
                 .subscribeOn(Schedulers.elastic())
                 .subscribe(
-                        ents -> {
-                            // success
-                            logger.debug("There are " + ents.size() + " trx submitted successfully.");
-                            logger.debug("Trx 1: " + ents.get(0).toString());
-                            logger.debug("Trx 2: " + ents.get(1).toString());
+                        val -> {
+                            logger.debug("Zip value: " + val);
+                            // Commitment here
                         },
-                        e -> {
-                            // failure
-                            logger.debug(e.getMessage());
+                        err -> {
+                            logger.debug("Zip error: " + err.getMessage());
+                            // Compensating here
                         }
                 );
 
-        return " ";
+        return "OK";
     }
 
 }
