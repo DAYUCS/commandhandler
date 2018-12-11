@@ -118,19 +118,22 @@ public class CommandHandlerApplication {
 
     @PutMapping("/balance/{id}/{amount}")
     @ResponseBody
-    public String postTransaction(@PathVariable("id") Long id, @PathVariable("amount") float amount) {
+    public Service[] postTransaction(@PathVariable("id") Long id, @PathVariable("amount") float amount) {
+
         logger.debug("Request for post transaction: id " + id + ", amount " + amount);
+
+        StringBuffer message = new StringBuffer();
 
         // Services definition
         Service[] services =
                 new Service[]{
                         new Service("http://localhost:8081/balance",
                                 "/{id}/{amount}/{transactionId}",
-                                "/{id}/{transactionId",
+                                "/{id}/{transactionId}",
                                 true, "/{id}"),
                         new Service("http://localhost:8082/balance",
                                 "/{id}/{amount}/{transactionId}",
-                                "/{id}/{transactionId",
+                                "/{id}/{transactionId}",
                                 true, "/{id}")};
 
         Flux<Service> steps = Flux.fromArray(services);
@@ -176,12 +179,11 @@ public class CommandHandlerApplication {
 
         // Zip all API call
         Mono<String> all = Mono.zipDelayError(entries, values -> {
-            StringBuffer sb = new StringBuffer();
             for (int i = 0; i < values.length; i++) {
-                logger.debug("Trx " + i + ": " + values[i].toString());
-                sb.append(values[i]);
+                logger.debug("Submit Trx " + i + ": " + values[i].toString());
+                message.append("Submit Trx" + i + ": " + values[i] + "; ");
             }
-            return sb.toString();
+            return message.toString();
         });
 
         // submit transactions
@@ -205,24 +207,26 @@ public class CommandHandlerApplication {
                                         .bodyToMono(Balance.class)
                                         .log()
                                         .doOnSuccess(p -> {
-                                            logger.debug("Call " + commitStep.getCommitUrl() + " completed with response " + p.toString());
+                                            logger.debug("Call " + commitStep.getCommitUrl()
+                                                    + " completed with response " + p.toString());
                                             commitStep.setCommitStatus("success");
                                             // TODO save submit step status into event store
                                         })
                                         .doOnError(ex -> {
-                                            logger.debug("Call " + commitStep.getCommitUrl() + " completed with error " + ex.getMessage());
+                                            logger.debug("Call " + commitStep.getCommitUrl()
+                                                    + " completed with error " + ex.getMessage());
                                             commitStep.setCommitStatus("error");
                                             // TODO save submit step status into event store
                                         });
                                 balances.add(balance);
                             });
+                            logger.debug("Record number to commit: " + balances.size());
                             Mono.zipDelayError(balances, values -> {
-                                StringBuffer sb = new StringBuffer();
                                 for (int i = 0; i < values.length; i++) {
-                                    logger.debug("Trx " + i + ": " + values[i].toString());
-                                    sb.append(values[i]);
+                                    logger.debug("Commit Trx " + i + ": " + values[i].toString());
+                                    message.append("Commit Trx" + i + ": " + values[i] + "; ");
                                 }
-                                return sb.toString();
+                                return message.toString();
                             }).timeout(Duration.ofSeconds(30))
                                     .subscribeOn(Schedulers.elastic()).subscribe(v -> {
                                         //TODO save commit step status into event store
@@ -234,10 +238,51 @@ public class CommandHandlerApplication {
                         err -> {
                             logger.debug("Zip error: " + err.getMessage());
                             // TODO Compensating here
+                            Flux<Service> compensatingSteps = Flux.fromArray(services)
+                                    .filter(service -> service.getSubmitStatus().equals("success"));
+                            List<Mono<Entry>> entriesCompensating = new ArrayList();
+                            compensatingSteps.subscribe(compensatingStep -> {
+                                Mono<Entry> entryCompensating = WebClient.create()
+                                        .put()
+                                        .uri(compensatingStep.getBaseUrl() + compensatingStep.getCompensatingUrl(), id, eventId)
+                                        .accept(MediaType.APPLICATION_JSON)
+                                        .retrieve()
+                                        .onStatus(HttpStatus::is4xxClientError, clientResponse ->
+                                                Mono.error(new ResourceLockedException()))
+                                        .bodyToMono(Entry.class)
+                                        .log()
+                                        .doOnSuccess(p -> {
+                                            logger.debug("Call " + compensatingStep.getCompensatingUrl()
+                                                    + " completed with response " + p.toString());
+                                            compensatingStep.setCompensatingStatus("success");
+                                            // TODO save compensating step status into event store
+                                        })
+                                        .doOnError(ex -> {
+                                            logger.debug("Call " + compensatingStep.getCompensatingUrl()
+                                                    + " completed with error " + ex.getMessage());
+                                            compensatingStep.setCompensatingStatus("error");
+                                            // TODO save compensating step status into event store
+                                        });
+                                entriesCompensating.add(entryCompensating);
+                            });
+                            logger.debug("Record number to compensating: " + entriesCompensating.size());
+                            Mono.zipDelayError(entriesCompensating, values -> {
+                                for (int i = 0; i < values.length; i++) {
+                                    logger.debug("Compensating Trx " + i + ": " + values[i].toString());
+                                    message.append("Compensating Trx" + i + ": " + values[i] + "; ");
+                                }
+                                return message.toString();
+                            }).timeout(Duration.ofSeconds(30))
+                                    .subscribeOn(Schedulers.elastic()).subscribe(v -> {
+                                        //TODO save compensating step status into event store
+                                    },
+                                    e -> {
+                                        //TODO save compensating step status into event store
+                                    });
                         }
                 );
 
-        return "OK";
+        return services;
     }
 
 }
