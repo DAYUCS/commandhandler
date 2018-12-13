@@ -42,6 +42,6 @@ public class Balance {
 
     @Override
     public String toString() {
-        return getId() + "," + getBalance() + "," + getHoldFlag();
+        return "Id:" + getId() + ", Balance: " + getBalance() + ", Hold Flag:" + getHoldFlag();
     }
 }

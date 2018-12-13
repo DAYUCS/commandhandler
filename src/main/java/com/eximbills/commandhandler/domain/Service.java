@@ -9,14 +9,16 @@ public class Service {
     private String commitUrl;
     private String commitStatus;
     private String compensatingStatus;
+    private String retrieveUrl;
 
     public Service(String baseUrl, String trxUrl, String compensatingUrl, Boolean holdFlag,
-                   String commitUrl) {
+                   String commitUrl, String retrieveUrl) {
         this.setBaseUrl(baseUrl);
         this.setTrxUrl(trxUrl);
         this.setCompensatingUrl(compensatingUrl);
         this.setHoldFlag(holdFlag);
         this.setCommitUrl(commitUrl);
+        this.setRetrieveUrl(retrieveUrl);
     }
 
     public String getBaseUrl() {
@@ -81,5 +83,13 @@ public class Service {
 
     public void setCompensatingStatus(String compensatingStatus) {
         this.compensatingStatus = compensatingStatus;
+    }
+
+    public String getRetrieveUrl() {
+        return retrieveUrl;
+    }
+
+    public void setRetrieveUrl(String retrieveUrl) {
+        this.retrieveUrl = retrieveUrl;
     }
 }
