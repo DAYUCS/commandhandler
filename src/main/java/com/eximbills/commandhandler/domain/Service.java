@@ -10,15 +10,17 @@ public class Service {
     private String commitStatus;
     private String compensatingStatus;
     private String retrieveUrl;
+    private Boolean debitCreditFlag;
 
     public Service(String baseUrl, String trxUrl, String compensatingUrl, Boolean holdFlag,
-                   String commitUrl, String retrieveUrl) {
+                   String commitUrl, String retrieveUrl, Boolean debitCreditFlag) {
         this.setBaseUrl(baseUrl);
         this.setTrxUrl(trxUrl);
         this.setCompensatingUrl(compensatingUrl);
         this.setHoldFlag(holdFlag);
         this.setCommitUrl(commitUrl);
         this.setRetrieveUrl(retrieveUrl);
+        this.setDebitCreditFlag(debitCreditFlag);
     }
 
     public String getBaseUrl() {
@@ -91,5 +93,13 @@ public class Service {
 
     public void setRetrieveUrl(String retrieveUrl) {
         this.retrieveUrl = retrieveUrl;
+    }
+
+    public Boolean getDebitCreditFlag() {
+        return debitCreditFlag;
+    }
+
+    public void setDebitCreditFlag(Boolean debitCreditFlag) {
+        this.debitCreditFlag = debitCreditFlag;
     }
 }

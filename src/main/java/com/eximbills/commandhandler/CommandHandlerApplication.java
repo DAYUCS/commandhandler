@@ -76,11 +76,13 @@ public class CommandHandlerApplication {
                         new Service("http://localhost:8081/balance",
                                 "/{id}/{amount}/{transactionId}",
                                 "/{id}/{transactionId}",
-                                true, "/{id}", "/{id}"),
+                                true, "/{id}", "/{id}",
+                                true),
                         new Service("http://localhost:8082/balance",
                                 "/{id}/{amount}/{transactionId}",
                                 "/{id}/{transactionId}",
-                                true, "/{id}", "/{id}")};
+                                true, "/{id}", "/{id}",
+                                false)};
 
         List<Mono<Balance>> balances = new ArrayList();
         Flux.fromArray(services)
@@ -118,11 +120,13 @@ public class CommandHandlerApplication {
                         new Service("http://localhost:8081/balance",
                                 "/{id}/{amount}/{transactionId}",
                                 "/{id}/{transactionId}",
-                                true, "/{id}", "/{id}"),
+                                true, "/{id}", "/{id}",
+                                true),
                         new Service("http://localhost:8082/balance",
                                 "/{id}/{amount}/{transactionId}",
                                 "/{id}/{transactionId}",
-                                true, "/{id}", "/{id}")};
+                                true, "/{id}", "/{id}",
+                                false)};
 
         // Before post, write transaction info into event store
         String eventId = Generators.timeBasedGenerator().generate().toString();
@@ -141,9 +145,10 @@ public class CommandHandlerApplication {
         Flux.fromArray(services)
                 .parallel()
                 .subscribe(stp -> {
+                    float trxAmount = stp.getDebitCreditFlag() ? amount : -amount;
                     Mono<Entry> entry = WebClient.create()
                             .put()
-                            .uri(stp.getBaseUrl() + stp.getTrxUrl(), id, amount, eventId)
+                            .uri(stp.getBaseUrl() + stp.getTrxUrl(), id, trxAmount, eventId)
                             .accept(MediaType.APPLICATION_JSON)
                             .retrieve()
                             .onStatus(HttpStatus::is4xxClientError, clientResponse ->
