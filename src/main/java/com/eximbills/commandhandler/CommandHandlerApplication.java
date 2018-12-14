@@ -67,7 +67,7 @@ public class CommandHandlerApplication {
 
     @GetMapping("/balance/{id}")
     @ResponseBody
-    Mono<String> getBalanceInfo(@PathVariable("id") Long id) {
+    Mono<List<Balance>> getBalanceInfo(@PathVariable("id") Long id) {
         logger.debug("Request for get balances with Id " + id);
 
         //Service definition
@@ -82,8 +82,6 @@ public class CommandHandlerApplication {
                                 "/{id}/{transactionId}",
                                 true, "/{id}", "/{id}")};
 
-        StringBuffer sb = new StringBuffer();
-
         List<Mono<Balance>> balances = new ArrayList();
         Flux.fromArray(services)
                 .parallel()
@@ -97,14 +95,17 @@ public class CommandHandlerApplication {
                     balances.add(balance);
                 });
 
+        List<Balance> balanceList = new ArrayList();
         return Mono.zipDelayError(balances, values -> {
             for (int i = 0; i < values.length; i++) {
-                sb.append("Balance " + i + " - " + values[i] + "; ");
+                balanceList.add((Balance) values[i]);
+                logger.debug("Balance " + i + " - " + values[i] + ";\n\t");
             }
-            return sb.toString();
-        });
+            return "";
+        }).subscribeOn(Schedulers.parallel()).then(Mono.defer(() -> {
+            return Mono.just(balanceList);
+        }));
     }
-
 
     @PutMapping("/balance/{id}/{amount}")
     @ResponseBody
