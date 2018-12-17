@@ -233,7 +233,7 @@ public class CommandHandlerApplication {
             List<Mono<Entry>> entriesCompensating = new ArrayList();
             Flux.fromArray(services)
                     .parallel()
-                    .filter(service -> service.getSubmitStatus().equals("success")) //TODO all services should be compensated
+                    //.filter(service -> service.getSubmitStatus().equals("success")) //all services should be compensated
                     .subscribe(compensatingStep -> {
                         Mono<Entry> entryCompensating = WebClient.create()
                                 .put()
