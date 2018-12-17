@@ -77,12 +77,17 @@ public class CommandHandlerApplication {
                                 "/{id}/{amount}/{transactionId}",
                                 "/{id}/{transactionId}",
                                 true, "/{id}", "/{id}",
-                                true),
+                                true, (float) 0.00),
                         new Service("http://localhost:8082/balance",
                                 "/{id}/{amount}/{transactionId}",
                                 "/{id}/{transactionId}",
                                 true, "/{id}", "/{id}",
-                                false)};
+                                false, (float) 0.00),
+                        new Service("http://localhost:8083/balance",
+                                "/{id}/{amount}/{transactionId}",
+                                "/{id}/{transactionId}",
+                                true, "/{id}", "/{id}",
+                                false, (float) 0.00)};
 
         List<Mono<Balance>> balances = new ArrayList();
         Flux.fromArray(services)
@@ -109,33 +114,17 @@ public class CommandHandlerApplication {
         }));
     }
 
-    @PutMapping("/balance/{id}/{amount}")
+    @PostMapping(value = "/balance/{id}", consumes = "application/json")
     @ResponseBody
-    public Mono<String> postTransaction(@PathVariable("id") Long id, @PathVariable("amount") float amount) {
-        logger.debug("Request for post transaction: id " + id + ", amount " + amount);
-
-        //Service definition
-        Service[] services =
-                new Service[]{
-                        new Service("http://localhost:8081/balance",
-                                "/{id}/{amount}/{transactionId}",
-                                "/{id}/{transactionId}",
-                                true, "/{id}", "/{id}",
-                                true),
-                        new Service("http://localhost:8082/balance",
-                                "/{id}/{amount}/{transactionId}",
-                                "/{id}/{transactionId}",
-                                true, "/{id}", "/{id}",
-                                false)};
+    public Mono<String> postTransaction(@PathVariable("id") Long id, @RequestBody Service[] services) {
+        logger.debug("Request for post transaction: id " + id);
 
         // Before post, write transaction info into event store
         String eventId = Generators.timeBasedGenerator().generate().toString();
-        Event event = new Event(eventId, "Post transaction with id " + id + ", amount " + amount,
-                "start");
+        Event event = new Event(eventId, "Post transaction with id " + id, "start");
 
         String stepId = Generators.timeBasedGenerator().generate().toString();
-        Step step = new Step(stepId, "Post transaction with id " + id + ", amount " + amount,
-                "start", event);
+        Step step = new Step(stepId, "Post transaction with id " + id, "start", event);
 
         eventRepository.save(event);
         stepRepository.save(step);
@@ -145,7 +134,7 @@ public class CommandHandlerApplication {
         Flux.fromArray(services)
                 .parallel()
                 .subscribe(stp -> {
-                    float trxAmount = stp.getDebitCreditFlag() ? amount : -amount;
+                    float trxAmount = stp.getDebitCreditFlag() ? stp.getAmount() : -stp.getAmount();
                     Mono<Entry> entry = WebClient.create()
                             .put()
                             .uri(stp.getBaseUrl() + stp.getTrxUrl(), id, trxAmount, eventId)

@@ -11,9 +11,10 @@ public class Service {
     private String compensatingStatus;
     private String retrieveUrl;
     private Boolean debitCreditFlag;
+    private float amount;
 
     public Service(String baseUrl, String trxUrl, String compensatingUrl, Boolean holdFlag,
-                   String commitUrl, String retrieveUrl, Boolean debitCreditFlag) {
+                   String commitUrl, String retrieveUrl, Boolean debitCreditFlag, float amount) {
         this.setBaseUrl(baseUrl);
         this.setTrxUrl(trxUrl);
         this.setCompensatingUrl(compensatingUrl);
@@ -21,6 +22,7 @@ public class Service {
         this.setCommitUrl(commitUrl);
         this.setRetrieveUrl(retrieveUrl);
         this.setDebitCreditFlag(debitCreditFlag);
+        this.setAmount(amount);
     }
 
     public String getBaseUrl() {
@@ -101,5 +103,13 @@ public class Service {
 
     public void setDebitCreditFlag(Boolean debitCreditFlag) {
         this.debitCreditFlag = debitCreditFlag;
+    }
+
+    public float getAmount() {
+        return amount;
+    }
+
+    public void setAmount(float amount) {
+        this.amount = amount;
     }
 }
