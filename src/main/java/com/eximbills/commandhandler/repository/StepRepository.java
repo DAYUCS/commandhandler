@@ -1,10 +1,9 @@
 package com.eximbills.commandhandler.repository;
 
 import com.eximbills.commandhandler.domain.Step;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
+import org.springframework.stereotype.Repository;
 
-public interface StepRepository extends CrudRepository<Step, String> {
-    Page<Step> findByEventId(String eventId, Pageable pageable);
+@Repository
+public interface StepRepository extends ReactiveMongoRepository<Step, String> {
 }

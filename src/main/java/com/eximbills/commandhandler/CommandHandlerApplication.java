@@ -4,11 +4,19 @@ import com.eximbills.commandhandler.domain.*;
 import com.eximbills.commandhandler.repository.EventRepository;
 import com.eximbills.commandhandler.repository.StepRepository;
 import com.fasterxml.uuid.Generators;
+import com.mongodb.reactivestreams.client.MongoClient;
+import com.mongodb.reactivestreams.client.MongoClients;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
+import org.springframework.data.mongodb.config.AbstractReactiveMongoConfiguration;
+import org.springframework.data.mongodb.core.ReactiveMongoOperations;
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRepositories;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,22 +29,40 @@ import reactor.core.scheduler.Schedulers;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @EnableAutoConfiguration
-public class CommandHandlerApplication {
+@EnableReactiveMongoRepositories
+public class CommandHandlerApplication extends AbstractReactiveMongoConfiguration {
 
     private static final Logger logger = LoggerFactory.getLogger(CommandHandlerApplication.class);
 
     @Autowired
+    private Environment environment;
+    @Autowired
+    private ReactiveMongoOperations reactiveMongoOperations;
+    @Autowired
     private EventRepository eventRepository;
-
     @Autowired
     private StepRepository stepRepository;
 
     public static void main(String[] args) {
         SpringApplication.run(CommandHandlerApplication.class, args);
+    }
+
+    @Bean
+    public MongoClient reactiveMongoClient() {
+        return MongoClients.create();
+    }
+
+    @Bean
+    public ReactiveMongoTemplate reactiveMongoTemplate() {
+        return new ReactiveMongoTemplate(reactiveMongoClient(), "eventstore");
+    }
+
+    @Override
+    protected String getDatabaseName() {
+        return environment.getProperty("spring.data.mongodb.database");
     }
 
     @RequestMapping("/")
@@ -45,7 +71,7 @@ public class CommandHandlerApplication {
     String home() {
         logger.debug("Request for /");
 
-        String eventId = UUID.randomUUID().toString();
+        /*String eventId = UUID.randomUUID().toString();
         Event event = new Event(eventId, "Test Event",
                 "finished");
 
@@ -61,7 +87,7 @@ public class CommandHandlerApplication {
         });
         stepRepository.findById(stepId).ifPresent(stp -> {
             logger.debug("Step: " + stp.toString());
-        });
+        });*/
         return "Application listening on port 8080...";
     }
 
@@ -124,50 +150,52 @@ public class CommandHandlerApplication {
         Event event = new Event(eventId, "Post transaction with id " + id, "start");
 
         String stepId = Generators.timeBasedGenerator().generate().toString();
-        Step step = new Step(stepId, "Post transaction with id " + id, "start", event);
+        Step step = new Step(stepId, eventId, "Post transaction with id " + id, "start");
 
-        eventRepository.save(event);
-        stepRepository.save(step);
-
-        // Build Web API call of submits
-        List<Mono<Entry>> entries = new ArrayList();
-        Flux.fromArray(services)
-                .parallel()
-                .subscribe(stp -> {
-                    float trxAmount = stp.getDebitCreditFlag() ? stp.getAmount() : -stp.getAmount();
-                    Mono<Entry> entry = WebClient.create()
-                            .put()
-                            .uri(stp.getBaseUrl() + stp.getTrxUrl(), id, trxAmount, eventId)
-                            .accept(MediaType.APPLICATION_JSON)
-                            .retrieve()
-                            .onStatus(HttpStatus::is4xxClientError, clientResponse ->
-                                    Mono.error(new ResourceLockedException()))
-                            .bodyToMono(Entry.class)
-                            .log()
-                            .doOnSuccess(p -> {
-                                logger.debug("Call " + stp.getTrxUrl() + " completed with response " + p.toString());
-                                stp.setSubmitStatus("success");
-                                // TODO save step status into event store
-                            })
-                            .doOnError(ex -> {
-                                logger.debug("Call " + stp.getTrxUrl() + " completed with error " + ex.getMessage());
-                                stp.setSubmitStatus("error");
-                                // TODO save step status into event store
+        return reactiveMongoTemplate().inTransaction()
+                .execute(action -> action.insert(event)
+                        .then(action.insert(step)))
+                .then(Mono.defer(() -> {
+                    // Build Web API call of submits
+                    List<Mono<Entry>> entries = new ArrayList();
+                    Flux.fromArray(services)
+                            .parallel()
+                            .subscribe(stp -> {
+                                float trxAmount = stp.getDebitCreditFlag() ? stp.getAmount() : -stp.getAmount();
+                                Mono<Entry> entry = WebClient.create()
+                                        .put()
+                                        .uri(stp.getBaseUrl() + stp.getTrxUrl(), id, trxAmount, eventId)
+                                        .accept(MediaType.APPLICATION_JSON)
+                                        .retrieve()
+                                        .onStatus(HttpStatus::is4xxClientError, clientResponse ->
+                                                Mono.error(new ResourceLockedException()))
+                                        .bodyToMono(Entry.class)
+                                        .log()
+                                        .doOnSuccess(p -> {
+                                            logger.debug("Call " + stp.getTrxUrl() + " completed with response " + p.toString());
+                                            stp.setSubmitStatus("success");
+                                            // TODO save step status into event store
+                                        })
+                                        .doOnError(ex -> {
+                                            logger.debug("Call " + stp.getTrxUrl() + " completed with error " + ex.getMessage());
+                                            stp.setSubmitStatus("error");
+                                            // TODO save step status into event store
+                                        });
+                                entries.add(entry);
                             });
-                    entries.add(entry);
-                });
 
-        logger.debug("There are " + entries.size() + " transactions to be submitted");
+                    logger.debug("There are " + entries.size() + " transactions to be submitted");
 
-        // Merge all API call
-        return Mono.whenDelayError(entries)
-                .subscribeOn(Schedulers.parallel())
-                .onErrorResume(ex -> {
-                    logger.debug("Catch submit zip exception: " + ex.getMessage());
-                    return Mono.empty();
-                })
-                .then(Mono.defer(() -> commitOrCompensating(services, id, eventId)))
-                .then(Mono.defer(() -> constructReturnMessage(services)));
+                    // Merge all API call
+                    return Mono.whenDelayError(entries)
+                            .subscribeOn(Schedulers.parallel())
+                            .onErrorResume(ex -> {
+                                logger.debug("Catch submit zip exception: " + ex.getMessage());
+                                return Mono.empty();
+                            })
+                            .then(Mono.defer(() -> commitOrCompensating(services, id, eventId)))
+                            .then(Mono.defer(() -> constructReturnMessage(services)));
+                }));
     }
 
     private Mono<Void> commitOrCompensating(Service[] services, Long id, String eventId) {

@@ -1,57 +1,37 @@
 package com.eximbills.commandhandler.domain;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import java.io.Serializable;
+import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-@Entity
-public class Event implements Serializable {
+import java.util.Date;
+
+@Data
+@RequiredArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PRIVATE, force = true)
+@Getter
+@Setter
+@ToString
+@Document(collection = "events")
+public class Event {
 
     @Id
-    @Column(length = 36)
     private String id;
 
-    @Column(length = 256)
+    @NonNull
     private String description;
 
-    @Column(length = 32)
+    @NonNull
     private String status;
 
-    protected Event() {}
+    @NonNull
+    private Date createdDate;
 
     public Event(String id, String description, String status) {
-        this.setId(id);
-        this.setDescription(description);
-        this.setStatus(status);
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
         this.id = id;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
         this.description = description;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
         this.status = status;
+        this.createdDate = new Date();
     }
 
-    @Override
-    public String toString() {
-        return getId() + "," + getDescription() + "," + getStatus();
-    }
 }

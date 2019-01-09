@@ -1,76 +1,41 @@
 package com.eximbills.commandhandler.domain;
 
-import org.hibernate.annotations.OnDelete;
-import org.hibernate.annotations.OnDeleteAction;
+import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-import javax.persistence.*;
-import java.io.Serializable;
+import java.util.Date;
 
-@Entity
-public class Step implements Serializable {
+@Data
+@RequiredArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PRIVATE, force = true)
+@Getter
+@Setter
+@ToString
+@Document(collection = "steps")
+public class Step {
 
     @Id
-    @Column(length = 36)
     private String id;
 
-    @Column(length = 256)
+    @NonNull
+    private String eventId;
+
+    @NonNull
     private String entryDescription;
 
-    @Column(length = 32)
+    @NonNull
     private String entryStatus;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "event_id", nullable = false)
-    @OnDelete(action = OnDeleteAction.CASCADE)
-    private Event event;
+    @NonNull
+    private Date createdDate;
 
-    protected Step() {
-    }
-
-    public Step(String id, String entryDescription, String entryStatus, Event event) {
-        this.setId(id);
-        this.setEntryDescription(entryDescription);
-        this.setEntryStatus(entryStatus);
-        this.setEvent(event);
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
+    public Step (String id, String eventId, String entryDescription, String entryStatus) {
         this.id = id;
-    }
-
-    public String getEntryDescription() {
-        return entryDescription;
-    }
-
-    public void setEntryDescription(String entryDescription) {
+        this.eventId = eventId;
         this.entryDescription = entryDescription;
-    }
-
-    public Event getEvent() {
-        return event;
-    }
-
-    public void setEvent(Event event) {
-        this.event = event;
-    }
-
-    public String getEntryStatus() {
-        return entryStatus;
-    }
-
-    public void setEntryStatus(String entryStatus) {
         this.entryStatus = entryStatus;
+        this.createdDate = new Date();
     }
-
-    @Override
-    public String toString() {
-        return getId() + "," + getEntryDescription() + "," + getEntryStatus()
-                + "," + getEvent().toString();
-    }
-
 
 }
