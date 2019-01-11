@@ -1,14 +1,16 @@
 package com.eximbills.commandhandler.domain;
 
+
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 @Data
 @RequiredArgsConstructor
-@NoArgsConstructor(access = AccessLevel.PRIVATE, force = true)
 @Getter
 @Setter
 @ToString
@@ -18,19 +20,17 @@ public class Event {
     @Id
     private String id;
 
-    @NonNull
-    private String description;
+    private List<Service> serviceList = new ArrayList<>();
 
-    @NonNull
-    private String status;
-
-    @NonNull
     private Date createdDate;
 
-    public Event(String id, String description, String status) {
+    private String eventStatus;
+
+    private Date updatedDate;
+
+    public Event(String id, List<Service> serviceList) {
         this.id = id;
-        this.description = description;
-        this.status = status;
+        this.serviceList = serviceList;
         this.createdDate = new Date();
     }
 

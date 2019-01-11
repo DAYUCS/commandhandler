@@ -8,7 +8,6 @@ import java.util.Date;
 
 @Data
 @RequiredArgsConstructor
-@NoArgsConstructor(access = AccessLevel.PRIVATE, force = true)
 @Getter
 @Setter
 @ToString
@@ -22,19 +21,23 @@ public class Step {
     private String eventId;
 
     @NonNull
-    private String entryDescription;
+    private String serviceId;
 
     @NonNull
-    private String entryStatus;
+    private String stepType;
+
+    @NonNull
+    private String stepStatus;
 
     @NonNull
     private Date createdDate;
 
-    public Step (String id, String eventId, String entryDescription, String entryStatus) {
+    public Step (String id, String eventId, String serviceId, String stepType, String stepStatus) {
         this.id = id;
         this.eventId = eventId;
-        this.entryDescription = entryDescription;
-        this.entryStatus = entryStatus;
+        this.serviceId = serviceId;
+        this.stepType = stepType;
+        this.stepStatus = stepStatus;
         this.createdDate = new Date();
     }
 
