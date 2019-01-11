@@ -4,18 +4,11 @@ import com.eximbills.commandhandler.domain.*;
 import com.eximbills.commandhandler.repository.EventRepository;
 import com.eximbills.commandhandler.repository.StepRepository;
 import com.fasterxml.uuid.Generators;
-import com.mongodb.reactivestreams.client.MongoClient;
-import com.mongodb.reactivestreams.client.MongoClients;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.core.env.Environment;
-import org.springframework.data.mongodb.config.AbstractReactiveMongoConfiguration;
-import org.springframework.data.mongodb.core.ReactiveMongoOperations;
-import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRepositories;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -34,14 +27,14 @@ import java.util.List;
 @RestController
 @EnableAutoConfiguration
 @EnableReactiveMongoRepositories
-public class CommandHandlerApplication extends AbstractReactiveMongoConfiguration {
+public class CommandHandlerApplication {
 
     private static final Logger logger = LoggerFactory.getLogger(CommandHandlerApplication.class);
 
-    @Autowired
-    private Environment environment;
-    @Autowired
-    private ReactiveMongoOperations reactiveMongoOperations;
+//    @Autowired
+//    private Environment environment;
+//    @Autowired
+//    private ReactiveMongoOperations reactiveMongoOperations;
     @Autowired
     private EventRepository eventRepository;
     @Autowired
@@ -51,20 +44,20 @@ public class CommandHandlerApplication extends AbstractReactiveMongoConfiguratio
         SpringApplication.run(CommandHandlerApplication.class, args);
     }
 
-    @Bean
-    public MongoClient reactiveMongoClient() {
-        return MongoClients.create();
-    }
-
-    @Bean
-    public ReactiveMongoTemplate reactiveMongoTemplate() {
-        return new ReactiveMongoTemplate(reactiveMongoClient(), "eventstore");
-    }
-
-    @Override
-    protected String getDatabaseName() {
-        return environment.getProperty("spring.data.mongodb.database");
-    }
+//    @Bean
+//    public MongoClient reactiveMongoClient() {
+//        return MongoClients.create();
+//    }
+//
+//    @Bean
+//    public ReactiveMongoTemplate reactiveMongoTemplate() {
+//        return new ReactiveMongoTemplate(reactiveMongoClient(), "eventstore");
+//    }
+//
+//    @Override
+//    protected String getDatabaseName() {
+//        return environment.getProperty("spring.data.mongodb.database");
+//    }
 
     @RequestMapping("/")
     @ResponseBody
