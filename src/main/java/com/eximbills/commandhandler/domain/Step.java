@@ -32,8 +32,7 @@ public class Step {
     @NonNull
     private Date createdDate;
 
-    public Step (String id, String eventId, String serviceId, String stepType, String stepStatus) {
-        this.id = id;
+    public Step (String eventId, String serviceId, String stepType, String stepStatus) {
         this.eventId = eventId;
         this.serviceId = serviceId;
         this.stepType = stepType;

@@ -31,33 +31,15 @@ public class CommandHandlerApplication {
 
     private static final Logger logger = LoggerFactory.getLogger(CommandHandlerApplication.class);
 
-//    @Autowired
-//    private Environment environment;
-//    @Autowired
-//    private ReactiveMongoOperations reactiveMongoOperations;
     @Autowired
     private EventRepository eventRepository;
+
     @Autowired
     private StepRepository stepRepository;
 
     public static void main(String[] args) {
         SpringApplication.run(CommandHandlerApplication.class, args);
     }
-
-//    @Bean
-//    public MongoClient reactiveMongoClient() {
-//        return MongoClients.create();
-//    }
-//
-//    @Bean
-//    public ReactiveMongoTemplate reactiveMongoTemplate() {
-//        return new ReactiveMongoTemplate(reactiveMongoClient(), "eventstore");
-//    }
-//
-//    @Override
-//    protected String getDatabaseName() {
-//        return environment.getProperty("spring.data.mongodb.database");
-//    }
 
     @RequestMapping("/")
     @ResponseBody
@@ -145,15 +127,15 @@ public class CommandHandlerApplication {
                             .doOnSuccess(p -> {
                                 logger.debug("Call " + stp.getTrxUrl() + " completed with response " + p.toString());
                                 stp.setSubmitStatus("succeed");
-                                String stepId = Generators.timeBasedGenerator().generate().toString();
-                                Step step = new Step(stepId, eventId, stp.getId(), "submit", "succeed");
+                                //String stepId = Generators.timeBasedGenerator().generate().toString();
+                                Step step = new Step(eventId, stp.getId(), "submit", "succeed");
                                 stepRepository.save(step).subscribe();
                             })
                             .doOnError(ex -> {
                                 logger.debug("Call " + stp.getTrxUrl() + " completed with error " + ex.getMessage());
                                 stp.setSubmitStatus("fail");
-                                String stepId = Generators.timeBasedGenerator().generate().toString();
-                                Step step = new Step(stepId, eventId, stp.getId(), "submit", "fail");
+                                //String stepId = Generators.timeBasedGenerator().generate().toString();
+                                Step step = new Step(eventId, stp.getId(), "submit", "fail");
                                 stepRepository.save(step).subscribe();
                             });
                     entries.add(entry);
@@ -201,16 +183,16 @@ public class CommandHandlerApplication {
                                     logger.debug("Call " + commitStep.getCommitUrl()
                                             + " completed with response " + p.toString());
                                     commitStep.setCommitStatus("succeed");
-                                    String stepId = Generators.timeBasedGenerator().generate().toString();
-                                    Step step = new Step(stepId, eventId, commitStep.getId(), "commit", "succeed");
+                                    //String stepId = Generators.timeBasedGenerator().generate().toString();
+                                    Step step = new Step(eventId, commitStep.getId(), "commit", "succeed");
                                     stepRepository.save(step).subscribe();
                                 })
                                 .doOnError(ex -> {
                                     logger.debug("Call " + commitStep.getCommitUrl()
                                             + " completed with error " + ex.getMessage());
                                     commitStep.setCommitStatus("fail");
-                                    String stepId = Generators.timeBasedGenerator().generate().toString();
-                                    Step step = new Step(stepId, eventId, commitStep.getId(), "commit", "fail");
+                                    //String stepId = Generators.timeBasedGenerator().generate().toString();
+                                    Step step = new Step(eventId, commitStep.getId(), "commit", "fail");
                                     stepRepository.save(step).subscribe();
                                 });
                         balances.add(balance);
@@ -244,16 +226,16 @@ public class CommandHandlerApplication {
                                     logger.debug("Call " + compensatingStep.getCompensatingUrl()
                                             + " completed with response " + p.toString());
                                     compensatingStep.setCompensatingStatus("succeed");
-                                    String stepId = Generators.timeBasedGenerator().generate().toString();
-                                    Step step = new Step(stepId, eventId, compensatingStep.getId(), "compensating", "succeed");
+                                    //String stepId = Generators.timeBasedGenerator().generate().toString();
+                                    Step step = new Step(eventId, compensatingStep.getId(), "compensating", "succeed");
                                     stepRepository.save(step).subscribe();
                                 })
                                 .doOnError(ex -> {
                                     logger.debug("Call " + compensatingStep.getCompensatingUrl()
                                             + " completed with error " + ex.getMessage());
                                     compensatingStep.setCompensatingStatus("fail");
-                                    String stepId = Generators.timeBasedGenerator().generate().toString();
-                                    Step step = new Step(stepId, eventId, compensatingStep.getId(), "compensating", "fail");
+                                    //String stepId = Generators.timeBasedGenerator().generate().toString();
+                                    Step step = new Step(eventId, compensatingStep.getId(), "compensating", "fail");
                                     stepRepository.save(step).subscribe();
                                 });
                         entriesCompensating.add(entryCompensating);
